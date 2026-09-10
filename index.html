@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Trails">
+<meta name="theme-color" content="#ece6d3" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1f231c" media="(prefers-color-scheme: dark)">
+<meta name="color-scheme" content="light dark">
+<title>Trails</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<div id="map" role="application" aria-label="Trail map"></div>
+
+<!-- Top bar: search + status -->
+<header class="topbar">
+  <form id="searchForm" class="search" role="search" autocomplete="off">
+    <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="m15.5 15.5 5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    <input id="searchInput" type="search" placeholder="Search a peak, park, or place" enterkeyhint="search" spellcheck="false">
+    <button type="button" id="searchClear" class="icon-btn hidden" aria-label="Clear search">&times;</button>
+  </form>
+  <div id="statusChip" class="chip online" role="status" aria-live="polite">
+    <span class="chip-dot"></span><span id="statusText">Online</span>
+  </div>
+</header>
+
+<!-- Right-hand controls -->
+<div class="fabs">
+  <button id="layersBtn" class="fab" aria-label="Map layers" title="Map layers">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2 8.5l10 5.5 10-5.5L12 3z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="m2 13 10 5.5L22 13M2 17.5 12 23l10-5.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+  </button>
+  <button id="locateBtn" class="fab" aria-label="My location" title="My location">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="6" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="2" fill="currentColor"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+  </button>
+  <button id="routeBtn" class="fab" aria-label="Plan a route" title="Plan a route">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="18" r="2.5" fill="currentColor"/><circle cx="19" cy="6" r="2.5" fill="currentColor"/><path d="M7 17c4 0 4-10 8-10h2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+  </button>
+  <button id="noteBtn" class="fab" aria-label="Add a note" title="Add a note">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22s7-6.5 7-12a7 7 0 0 0-14 0c0 5.5 7 12 7 12z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 7v6M9 10h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+  </button>
+</div>
+
+<!-- Polygon draw toolbar -->
+<div id="drawToolbar" class="floating-bar hidden" role="toolbar" aria-label="Draw an area">
+  <span id="drawHint">Tap the map to place corners</span>
+  <div class="floating-bar-actions">
+    <button type="button" id="drawUndo" class="btn btn-ghost">Undo</button>
+    <button type="button" id="drawCancel" class="btn btn-ghost">Cancel</button>
+    <button type="button" id="drawFinish" class="btn btn-primary" disabled>Finish</button>
+  </div>
+</div>
+
+<!-- Tap-to-place bar (notes, route points) -->
+<div id="placeBar" class="floating-bar hidden" role="status">
+  <span id="placeHint">Tap the map</span>
+  <div class="floating-bar-actions">
+    <button type="button" id="placeCancel" class="btn btn-ghost">Cancel</button>
+  </div>
+</div>
+
+<!-- GPS readout -->
+<div id="readout" class="readout hidden" aria-live="polite">
+  <div class="readout-main">
+    <span id="readoutDistance" class="readout-number">—</span>
+    <span id="readoutLabel" class="readout-label">waiting for a fix</span>
+  </div>
+  <div id="readoutSub" class="readout-sub"></div>
+  <div class="readout-actions">
+    <button type="button" id="followBtn" class="chip-btn" aria-pressed="false">Follow</button>
+    <button type="button" id="compassBtn" class="chip-btn" aria-pressed="false">Compass</button>
+    <button type="button" id="gpsStopBtn" class="chip-btn" aria-label="Stop location">Stop</button>
+  </div>
+</div>
+
+<!-- Layers popover -->
+<div id="layersPanel" class="popover hidden" role="dialog" aria-label="Map layers">
+  <div class="popover-head">
+    <h2>Basemap</h2>
+    <button type="button" id="layersClose" class="icon-btn" aria-label="Close">&times;</button>
+  </div>
+  <div id="basemapList" class="basemap-list"></div>
+  <p id="basemapNote" class="muted small"></p>
+  <h2>Overlays</h2>
+  <label class="toggle"><input type="checkbox" id="ovHillshade"><span>Hillshade</span></label>
+  <label class="toggle"><input type="checkbox" id="ovBoundaries" checked><span>Public land boundaries</span></label>
+  <label class="toggle"><input type="checkbox" id="ovTrails" checked><span>Trails</span></label>
+  <div id="poiToggles" class="poi-toggles"></div>
+  <h2>Legend</h2>
+  <div class="legend">
+    <div class="legend-row"><span class="legend-line" style="--c:#4f2e28"></span>Path, no difficulty tagged</div>
+    <div class="legend-row"><span class="legend-line" style="--c:#2e7d32"></span>Hiking (T1)</div>
+    <div class="legend-row"><span class="legend-line" style="--c:#2a62b5"></span>Mountain hiking (T2)</div>
+    <div class="legend-row"><span class="legend-line dashed" style="--c:#1c1c1c"></span>Demanding (T3) and up</div>
+    <div class="legend-row"><span class="legend-line" style="--c:#7a5a3a"></span>Track (vehicle-width)</div>
+    <div class="legend-row"><span class="legend-line dashed" style="--c:#4f2e28"></span>Informal / unofficial</div>
+    <div class="legend-row"><span class="legend-line faded" style="--c:#4f2e28"></span>Unnamed — thinly mapped, trust with care</div>
+    <div class="legend-row"><span class="legend-fill" style="--c:#a9c98a"></span>Federal land</div>
+    <div class="legend-row"><span class="legend-fill" style="--c:#8fbf9a"></span>State land</div>
+    <div class="legend-row"><span class="legend-fill" style="--c:#c9d9a1"></span>Local government</div>
+    <div class="legend-row"><span class="legend-fill" style="--c:#d9cf9a"></span>NGO / private conservation</div>
+    <div class="legend-row"><span class="legend-fill closed" style="--c:#cfcbc0"></span>Closed to the public</div>
+  </div>
+</div>
+
+<!-- Bottom sheet / side panel -->
+<section id="sheet" class="sheet snap-peek" aria-label="Details">
+  <div class="sheet-handle" id="sheetHandle" role="button" aria-label="Expand or collapse" tabindex="0"></div>
+  <nav class="tabs" aria-label="Sections">
+    <button type="button" data-tab="explore" class="active">Explore</button>
+    <button type="button" data-tab="saved">Saved</button>
+    <button type="button" data-tab="notes">Notes</button>
+    <button type="button" data-tab="settings">Settings</button>
+  </nav>
+  <div class="sheet-body">
+
+    <!-- Explore -->
+    <div class="panel active" data-panel="explore">
+      <div class="actions-row">
+        <button type="button" id="exploreDraw" class="btn">Draw an area</button>
+        <button type="button" id="exploreView" class="btn">Use this view</button>
+        <button type="button" id="exploreNear" class="btn">Trails near me</button>
+      </div>
+      <p id="exploreHint" class="muted">Draw an area or tap a park, forest, or game land boundary to save it for offline use. Tap any trail for details.</p>
+      <div id="selectionCard" class="card hidden">
+        <div class="card-title" id="selectionTitle"></div>
+        <div class="muted small" id="selectionSub"></div>
+        <div class="actions-row">
+          <button type="button" id="selectionOpen" class="btn btn-primary">Save for offline…</button>
+          <button type="button" id="selectionClear" class="btn btn-ghost">Clear</button>
+        </div>
+      </div>
+      <label class="field">
+        <span>Find a loaded trail by name</span>
+        <input type="search" id="trailFilter" placeholder="e.g. Mid State Trail" spellcheck="false">
+      </label>
+      <ul id="trailFilterResults" class="list"></ul>
+      <h3 class="section-title">Recent searches</h3>
+      <ul id="recentSearches" class="list"></ul>
+      <p id="recentEmpty" class="muted small">Nothing yet — search from the box at the top.</p>
+    </div>
+
+    <!-- Results (search / trails near) -->
+    <div class="panel" data-panel="results" data-tabgroup="explore">
+      <div class="panel-head">
+        <button type="button" class="icon-btn" data-back aria-label="Back">&larr;</button>
+        <h2 id="resultsTitle">Results</h2>
+      </div>
+      <div id="nearControls" class="hidden">
+        <label class="field inline"><span>Within</span>
+          <select id="nearRadius">
+            <option value="2000">2 km</option>
+            <option value="5000" selected>5 km</option>
+            <option value="10000">10 km</option>
+            <option value="20000">20 km</option>
+          </select>
+        </label>
+      </div>
+      <ul id="resultsList" class="list"></ul>
+      <p id="resultsEmpty" class="muted hidden">No results.</p>
+    </div>
+
+    <!-- Trail detail -->
+    <div class="panel" data-panel="trail" data-tabgroup="explore">
+      <div class="panel-head">
+        <button type="button" class="icon-btn" data-back aria-label="Back">&larr;</button>
+        <h2 id="trailName">Trail</h2>
+      </div>
+      <div id="trailBadges" class="badges"></div>
+      <p id="trailWarn" class="callout hidden"></p>
+      <dl id="trailMeta" class="meta"></dl>
+      <div id="trailRoutes" class="hidden">
+        <h3 class="section-title">Part of</h3>
+        <ul id="trailRoutesList" class="list compact"></ul>
+      </div>
+      <div class="actions-row">
+        <button type="button" id="trailZoom" class="btn">Zoom to</button>
+        <button type="button" id="trailProfileBtn" class="btn">Elevation profile</button>
+      </div>
+      <div class="actions-row">
+        <button type="button" id="trailRouteFrom" class="btn">Route from here</button>
+        <button type="button" id="trailRouteTo" class="btn">Route to here</button>
+      </div>
+      <div id="trailProfileWrap" class="profile hidden">
+        <canvas id="trailProfileCanvas" height="150"></canvas>
+        <div id="trailProfileStats" class="stats"></div>
+      </div>
+      <p class="small"><a id="trailOsmLink" href="#" target="_blank" rel="noopener">View on OpenStreetMap</a></p>
+    </div>
+
+    <!-- Boundary detail -->
+    <div class="panel" data-panel="boundary" data-tabgroup="explore">
+      <div class="panel-head">
+        <button type="button" class="icon-btn" data-back aria-label="Back">&larr;</button>
+        <h2 id="boundaryName">Protected area</h2>
+      </div>
+      <dl id="boundaryMeta" class="meta"></dl>
+      <div class="actions-row">
+        <button type="button" id="boundaryUse" class="btn btn-primary">Use as download area</button>
+        <button type="button" id="boundaryZoom" class="btn">Zoom to</button>
+      </div>
+    </div>
+
+    <!-- POI detail -->
+    <div class="panel" data-panel="poi" data-tabgroup="explore">
+      <div class="panel-head">
+        <button type="button" class="icon-btn" data-back aria-label="Back">&larr;</button>
+        <h2 id="poiName">Point</h2>
+      </div>
+      <ul id="poiMeta" class="list compact"></ul>
+      <div class="actions-row">
+        <button type="button" id="poiZoom" class="btn">Zoom to</button>
+        <button type="button" id="poiRouteTo" class="btn">Route to here</button>
+        <button type="button" id="poiNote" class="btn">Add a note here</button>
+      </div>
+    </div>
+
+    <!-- Route -->
+    <div class="panel" data-panel="route" data-tabgroup="explore">
+      <div class="panel-head">
+        <button type="button" class="icon-btn" data-back aria-label="Back">&larr;</button>
+        <h2>Route</h2>
+      </div>
+      <p id="routeHint" class="muted">Tap a start point on a trail, then an end point. Routing uses the trails loaded on screen — zoom in so the network around your route is loaded.</p>
+      <div id="routeStats" class="stats hidden"></div>
+      <ul id="routeSegments" class="list compact"></ul>
+      <div class="actions-row">
+        <button type="button" id="routeFromGps" class="btn">Start at my location</button>
+        <button type="button" id="routeReverse" class="btn">Reverse</button>
+        <button type="button" id="routeProfileBtn" class="btn">Elevation profile</button>
+        <button type="button" id="routeClear" class="btn btn-ghost">Clear</button>
+      </div>
+      <div id="routeProfileWrap" class="profile hidden">
+        <canvas id="routeProfileCanvas" height="150"></canvas>
+        <div id="routeProfileStats" class="stats"></div>
+      </div>
+    </div>
+
+    <!-- Area download -->
+    <div class="panel" data-panel="area" data-tabgroup="saved">
+      <div class="panel-head">
+        <button type="button" class="icon-btn" data-back aria-label="Back">&larr;</button>
+        <h2>Save for offline</h2>
+      </div>
+      <label class="field"><span>Name</span><input type="text" id="areaName" maxlength="80"></label>
+      <p class="muted small"><span id="areaSource"></span> · <span id="areaSize"></span></p>
+      <label class="field"><span>Basemap to save</span>
+        <select id="areaBasemap"></select>
+      </label>
+      <label class="toggle"><input type="checkbox" id="areaHillshade"><span>Also save hillshade overlay</span></label>
+      <div class="field-row">
+        <label class="field"><span>Detail (max zoom)</span>
+          <select id="areaZoom"></select>
+        </label>
+        <label class="field"><span>Margin</span>
+          <select id="areaMargin"></select>
+        </label>
+      </div>
+      <div class="estimate">
+        <div id="areaEstimate" class="estimate-text">—</div>
+        <button type="button" id="areaEstimateBtn" class="btn btn-small">Measure real tile sizes</button>
+      </div>
+      <p id="areaWarn" class="callout hidden"></p>
+      <button type="button" id="areaDownload" class="btn btn-primary wide">Download</button>
+      <div id="areaProgress" class="progress hidden">
+        <div id="areaPhase" class="small"></div>
+        <div class="progress-bar"><div id="areaBar" class="progress-fill"></div></div>
+        <div id="areaCounts" class="small muted"></div>
+        <div class="actions-row">
+          <button type="button" id="areaPause" class="btn">Pause</button>
+          <button type="button" id="areaCancel" class="btn btn-ghost">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Saved areas -->
+    <div class="panel" data-panel="saved">
+      <div class="storage">
+        <div class="progress-bar"><div id="storageBar" class="progress-fill"></div></div>
+        <div id="storageText" class="small muted">Checking storage…</div>
+      </div>
+      <label class="toggle big"><input type="checkbox" id="offlineToggle"><span>Offline mode — use a saved area</span></label>
+      <label class="field"><span>Saved area to show</span>
+        <select id="offlineAreaSelect"></select>
+      </label>
+      <p id="offlineNote" class="muted small">In offline mode the map is locked to the saved area's footprint and zoom range so it never wanders into blank tiles. It switches on by itself when the phone loses its connection.</p>
+      <ul id="savedList" class="list"></ul>
+      <p id="savedEmpty" class="muted">No saved areas yet. From Explore, draw an area or tap a boundary, then choose Save for offline.</p>
+    </div>
+
+    <!-- Notes -->
+    <div class="panel" data-panel="notes">
+      <div class="actions-row">
+        <button type="button" id="notesAdd" class="btn btn-primary">Add a note</button>
+        <button type="button" id="notesExport" class="btn">Export GeoJSON</button>
+        <label class="btn file-btn">Import<input type="file" id="notesImport" accept=".geojson,.json,application/geo+json,application/json" hidden></label>
+      </div>
+      <p class="muted small">Personal corrections and observations — where a junction really is, whether a spring was flowing. They stay on this device unless you connect a backend.</p>
+      <ul id="notesList" class="list"></ul>
+      <p id="notesEmpty" class="muted">No notes yet.</p>
+    </div>
+
+    <!-- Note editor -->
+    <div class="panel" data-panel="noteEdit" data-tabgroup="notes">
+      <div class="panel-head">
+        <button type="button" class="icon-btn" data-back aria-label="Back">&larr;</button>
+        <h2 id="noteEditTitle">Note</h2>
+      </div>
+      <label class="field"><span>Title</span><input type="text" id="noteTitle" maxlength="120"></label>
+      <label class="field"><span>Category</span><select id="noteCategory"></select></label>
+      <label class="field"><span>Note</span><textarea id="noteText" rows="4"></textarea></label>
+      <p id="noteCoords" class="muted small"></p>
+      <div class="actions-row">
+        <button type="button" id="noteSave" class="btn btn-primary">Save note</button>
+        <button type="button" id="noteDelete" class="btn btn-danger">Delete</button>
+      </div>
+    </div>
+
+    <!-- Settings -->
+    <div class="panel" data-panel="settings">
+      <h3 class="section-title">Map</h3>
+      <label class="field"><span>Units</span>
+        <select id="setUnits"><option value="imperial">Miles &amp; feet</option><option value="metric">Kilometres &amp; metres</option></select>
+      </label>
+      <label class="toggle"><input type="checkbox" id="setResume"><span>Open the last saved area on launch</span></label>
+      <label class="toggle"><input type="checkbox" id="setClosed"><span>Show lands closed to the public</span></label>
+      <label class="field"><span>Thunderforest API key <span class="muted">(optional, for the Outdoors basemap)</span></span>
+        <input type="text" id="setTfKey" autocomplete="off" spellcheck="false">
+      </label>
+
+      <h3 class="section-title">Location</h3>
+      <label class="toggle"><input type="checkbox" id="setBattery"><span>Battery saver — poll slowly while stationary</span></label>
+      <label class="toggle"><input type="checkbox" id="setBreadcrumb"><span>Session breadcrumb — trace where I've walked</span></label>
+      <div class="actions-row">
+        <button type="button" id="exportTrack" class="btn">Export breadcrumb (GPX)</button>
+        <button type="button" id="clearTrack" class="btn btn-ghost">Clear breadcrumb</button>
+      </div>
+
+      <h3 class="section-title">Downloads</h3>
+      <label class="field"><span>Maximum tiles per area</span>
+        <input type="number" id="setCap" min="500" max="100000" step="500">
+      </label>
+      <p class="muted small">Tile servers are shared, volunteer-run resources. Keep areas to what you'll actually walk.</p>
+
+      <h3 class="section-title">Backend</h3>
+      <label class="field"><span>Where saved areas and notes live</span>
+        <select id="backendMode"><option value="local">This device only</option><option value="django">Django server + this device</option></select>
+      </label>
+      <div id="backendFields" class="hidden">
+        <label class="field"><span>Server URL</span><input type="url" id="backendUrl" placeholder="https://dev.jacksonbouffard.com/trailapp" spellcheck="false"></label>
+        <label class="field"><span>API token</span><input type="password" id="backendToken" autocomplete="off"></label>
+        <div class="actions-row">
+          <button type="button" id="backendSave" class="btn btn-primary">Connect</button>
+          <button type="button" id="backendSync" class="btn">Sync now</button>
+        </div>
+        <p id="backendStatus" class="muted small"></p>
+      </div>
+
+      <h3 class="section-title">Storage</h3>
+      <p id="storageDetail" class="muted small"></p>
+      <button type="button" id="wipeBtn" class="btn btn-danger">Delete all app data</button>
+
+      <h3 class="section-title">About</h3>
+      <p class="muted small" id="aboutText">Trails — a personal offline trail map. Map data &copy; OpenStreetMap contributors; public land boundaries from USGS PAD-US; elevation from Open-Meteo (Copernicus DEM). Basemap credits are shown on the map.</p>
+    </div>
+
+  </div>
+</section>
+
+<div id="toasts" class="toasts" aria-live="polite"></div>
+
+<script src="vendor/leaflet/leaflet.js"></script>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
