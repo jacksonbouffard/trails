@@ -4,7 +4,7 @@
  * through the modules.
  */
 
-export const APP_VERSION = '2.0.0';
+export const APP_VERSION = '2.0.1';
 export const DB_NAME = 'trailapp';
 export const DB_VERSION = 2;
 

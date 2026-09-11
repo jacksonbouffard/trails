@@ -67,7 +67,7 @@ export class GpsTracker extends EventTarget {
     if (this.running) return;
     this.running = true;
     document.addEventListener('visibilitychange', this._onVisibility);
-    this._startWatch();
+    this._requestInitialFix();
     this._emit('state', { running: true });
   }
 
@@ -81,6 +81,20 @@ export class GpsTracker extends EventTarget {
   }
 
   toggle() { this.running ? this.stop() : this.start(); }
+
+  _requestInitialFix() {
+    // A one-shot request made directly from the location-button tap reliably
+    // triggers Safari's location prompt before continuous tracking begins.
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        if (!this.running) return;
+        this._onFix(pos, 'initial');
+        if (this.running) this._startWatch();
+      },
+      (err) => this._emit('error', { message: describeGeoError(err), code: err.code }),
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 },
+    );
+  }
 
   _startWatch() {
     this._stopSources();
