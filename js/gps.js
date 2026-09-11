@@ -59,6 +59,10 @@ export class GpsTracker extends EventTarget {
   get available() { return typeof navigator !== 'undefined' && !!navigator.geolocation; }
 
   start() {
+    if (!isSecureLocationContext()) {
+      this._emit('error', { message: 'Location requires HTTPS on phones. Open the HTTPS version of this site, then tap My location.' });
+      return;
+    }
     if (!this.available) { this._emit('error', { message: 'Location is not available in this browser.' }); return; }
     if (this.running) return;
     this.running = true;
@@ -229,6 +233,13 @@ function describeGeoError(err) {
     case 3: return 'Location timed out. Trying again.';
     default: return err?.message || 'Location error.';
   }
+}
+
+function isSecureLocationContext() {
+  if (typeof window === 'undefined' || typeof location === 'undefined') return true;
+  if (window.isSecureContext === true) return true;
+  const { protocol, hostname } = location;
+  return protocol === 'https:' || hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]';
 }
 
 function escapeXml(s) {

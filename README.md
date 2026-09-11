@@ -181,6 +181,10 @@ is ready.
 - **Background GPS.** Web apps don't get location while backgrounded. The
   tracker stops when the app is hidden and restarts on return; the
   breadcrumb will have a gap.
+- **Location permission.** Tap the My location button to trigger the browser
+  prompt. The phone must open the HTTPS site, not an `http://` LAN address.
+  The browser remembers Allow or Block for this site, so it does not ask
+  again unless the person changes that permission in browser or site settings.
 - **Compass** requires a tap (the Compass chip) to trigger the permission
   prompt.
 
