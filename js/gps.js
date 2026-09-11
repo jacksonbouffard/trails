@@ -82,9 +82,12 @@ export class GpsTracker extends EventTarget {
 
   toggle() { this.running ? this.stop() : this.start(); }
 
+  requestPermission() {
+    if (this.running) this._requestInitialFix();
+    else this.start();
+  }
+
   _requestInitialFix() {
-    // A one-shot request made directly from the location-button tap reliably
-    // triggers Safari's location prompt before continuous tracking begins.
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         if (!this.running) return;

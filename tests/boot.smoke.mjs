@@ -223,3 +223,10 @@ test('settings changes persist', async () => {
   assert.equal(ctx.settings.units, 'metric');
   assert.equal(await ctx.store.get('settings', 'units'), 'metric');
 });
+
+test('settings can explicitly request location permission', () => {
+  document.querySelector('#requestLocationPermission').click();
+  assert.equal(ctx.gps.running, true);
+  assert.equal(document.querySelector('#locationPermissionStatus').textContent, 'Requesting location permission…');
+  ctx.gps.stop();
+});

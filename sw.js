@@ -11,7 +11,7 @@
  * "reload for update" toast when a new worker takes over.
  */
 
-const CACHE_VERSION = 'trailapp-shell-v2.0.1';
+const CACHE_VERSION = 'trailapp-shell-v2.0.2';
 
 const SHELL = [
   './',

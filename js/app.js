@@ -378,6 +378,13 @@ function initSettingsPanel(ctx) {
   $('#setBattery').addEventListener('change', (e) => ctx.saveSetting('batterySaver', e.target.checked));
   $('#setBreadcrumb').checked = !!s.breadcrumb;
   $('#setBreadcrumb').addEventListener('change', (e) => { ctx.saveSetting('breadcrumb', e.target.checked); ctx.gps.setBreadcrumb(e.target.checked); });
+  const locationStatus = $('#locationPermissionStatus');
+  $('#requestLocationPermission').addEventListener('click', () => {
+    locationStatus.textContent = 'Requesting location permission…';
+    ctx.gps.requestPermission();
+  });
+  ctx.gps.addEventListener('position', () => { locationStatus.textContent = 'Location permission granted.'; });
+  ctx.gps.addEventListener('error', (e) => { locationStatus.textContent = `Location request failed: ${e.detail.message}`; });
   $('#setCap').value = s.hardCapTiles || DOWNLOAD.hardCapTiles;
   $('#setCap').addEventListener('change', (e) => ctx.saveSetting('hardCapTiles', Math.max(500, parseInt(e.target.value, 10) || DOWNLOAD.hardCapTiles)));
 
